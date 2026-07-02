@@ -21,6 +21,8 @@ const router = Router();
 router.get('/websites/config', validateApiKey, WebsiteController.publicConfig);
 router.post('/auth/widget', validateApiKey, authLimiter, validate(authValidators.widget), AuthController.widgetAuth);
 router.post('/auth/register', validateApiKey, authLimiter, validate(authValidators.register), AuthController.register);
+router.get('/auth/google/config', AuthController.googleConfig);
+router.post('/auth/google', validateApiKey, authLimiter, validate(authValidators.google), AuthController.googleAuth);
 router.post('/auth/login', authLimiter, validate(authValidators.login), AuthController.login);
 router.post('/auth/admin/login', authLimiter, validate(authValidators.login), AuthController.adminLogin);
 

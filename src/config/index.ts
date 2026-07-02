@@ -22,5 +22,8 @@ export const config = {
     email: process.env.ADMIN_EMAIL || 'admin@quantumchat.io',
     password: process.env.ADMIN_PASSWORD || 'Admin123!',
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+  },
   isDev: process.env.NODE_ENV !== 'production',
 };

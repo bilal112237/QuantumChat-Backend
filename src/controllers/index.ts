@@ -62,6 +62,32 @@ export class AuthController {
     }
   }
 
+  static async googleConfig(_req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { config } = await import('../config');
+      res.json({
+        success: true,
+        data: {
+          enabled: Boolean(config.google.clientId),
+          clientId: config.google.clientId || null,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async googleAuth(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const websiteId = req.website!._id.toString();
+      const { credential } = req.body;
+      const result = await AuthService.loginWithGoogle(websiteId, credential);
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async adminLogin(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { email, password } = req.body;
@@ -116,6 +142,7 @@ export const authValidators = {
     body('displayName').optional().trim().isLength({ min: 1, max: 100 }),
     body('avatarUrl').optional().isString(),
   ],
+  google: [body('credential').isString().isLength({ min: 10 })],
 };
 
 export class WebsiteController {

@@ -124,6 +124,70 @@ export class AuthService {
     return { user: toPublicUser(user), token };
   }
 
+  static async loginWithGoogle(websiteId: string, idToken: string) {
+    const { OAuth2Client } = await import('google-auth-library');
+    const { config } = await import('../config');
+
+    if (!config.google.clientId) {
+      throw new AppError(503, 'Google sign-in is not configured on the server');
+    }
+
+    const client = new OAuth2Client(config.google.clientId);
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: config.google.clientId,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email) throw new AppError(401, 'Invalid Google credentials');
+
+    const website = await Website.findById(websiteId);
+    if (!website?.isActive) throw new AppError(404, 'Website not found');
+
+    const email = payload.email.toLowerCase();
+    const googleId = payload.sub;
+    const displayName = (payload.name || email.split('@')[0]).trim();
+    const avatarUrl = payload.picture;
+
+    let user = await User.findOne({
+      websiteId,
+      $or: [{ email }, { externalId: googleId }],
+    });
+
+    if (!user) {
+      user = await User.create({
+        websiteId,
+        email,
+        displayName,
+        avatarUrl,
+        externalId: googleId,
+        role: USER_ROLES.USER,
+      });
+    } else {
+      user.displayName = displayName;
+      if (avatarUrl) user.avatarUrl = avatarUrl;
+      if (!user.externalId) user.externalId = googleId;
+      await user.save();
+    }
+
+    if (user.isBlocked) throw new AppError(403, 'Account blocked');
+
+    const authPayload: AuthPayload = {
+      userId: user._id.toString(),
+      websiteId: user.websiteId.toString(),
+      role: user.role,
+      email: user.email,
+    };
+
+    const token = signToken(authPayload);
+    await createSession(user._id.toString(), websiteId, token);
+
+    return {
+      user: toPublicUser(user),
+      token,
+      website: { name: website.name, branding: website.branding, settings: website.settings },
+    };
+  }
+
   static async adminLogin(email: string, password: string) {
     const user = await User.findOne({
       email: email.toLowerCase(),
