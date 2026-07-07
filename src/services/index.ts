@@ -609,16 +609,27 @@ export class AttachmentService {
     websiteId: string,
     uploaderId: string,
     file: Express.Multer.File,
-    baseUrl: string
+    baseUrl: string,
+    encryption?: {
+      isEncrypted?: boolean;
+      encryptionIv?: string;
+      originalMimeType?: string;
+      encryptedOriginalName?: string;
+    }
   ) {
+    const isEncrypted = encryption?.isEncrypted === true;
     const attachment = await Attachment.create({
       websiteId,
       uploaderId,
       filename: file.filename,
-      originalName: file.originalname,
-      mimeType: file.mimetype,
+      originalName: isEncrypted ? 'encrypted.bin' : file.originalname,
+      mimeType: isEncrypted ? 'application/octet-stream' : file.mimetype,
       size: file.size,
       url: `${baseUrl}/uploads/${file.filename}`,
+      isEncrypted,
+      encryptionIv: encryption?.encryptionIv,
+      originalMimeType: encryption?.originalMimeType,
+      encryptedOriginalName: encryption?.encryptedOriginalName,
     });
     return attachment;
   }

@@ -75,6 +75,10 @@ export interface IAttachment {
   mimeType: string;
   size: number;
   url: string;
+  isEncrypted?: boolean;
+  encryptionIv?: string;
+  originalMimeType?: string;
+  encryptedOriginalName?: string;
   createdAt: Date;
 }
 

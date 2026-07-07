@@ -402,7 +402,13 @@ export class AttachmentController {
         req.user!.websiteId,
         req.user!.userId,
         req.file,
-        baseUrl
+        baseUrl,
+        {
+          isEncrypted: req.body.isEncrypted === 'true',
+          encryptionIv: req.body.encryptionIv,
+          originalMimeType: req.body.originalMimeType,
+          encryptedOriginalName: req.body.encryptedOriginalName,
+        }
       );
       res.status(201).json({ success: true, data: attachment });
     } catch (err) {

@@ -33,6 +33,7 @@ export const ALLOWED_FILE_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain',
+  'application/octet-stream',
 ] as const;
 
 export const MAX_FILE_SIZE = 25 * 1024 * 1024;
