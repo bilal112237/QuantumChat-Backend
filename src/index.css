@@ -277,6 +277,43 @@ input:focus-visible,
   transition: border-color var(--transition-fast);
 }
 
+.auth-field:has(.auth-password-toggle) input {
+  padding-right: 44px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.auth-password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.auth-password-toggle:hover {
+  color: var(--text-primary);
+  background: var(--accent-muted);
+}
+
+.auth-field:focus-within .auth-password-toggle {
+  color: var(--text-secondary);
+}
+
 .auth-field input::placeholder {
   color: var(--text-muted);
 }

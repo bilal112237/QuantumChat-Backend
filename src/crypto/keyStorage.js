@@ -77,7 +77,18 @@ export function getToken() {
 
 export function getStoredUser() {
   const raw = localStorage.getItem(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    const user = JSON.parse(raw);
+    if (!user || typeof user !== 'object' || !user.id) {
+      clearSession();
+      return null;
+    }
+    return user;
+  } catch {
+    clearSession();
+    return null;
+  }
 }
 
 export function clearSession() {

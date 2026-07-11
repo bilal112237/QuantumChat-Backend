@@ -42,11 +42,11 @@ export default function UserList({ users, selectedUserId, onSelect, loading }) {
           aria-label={`Chat with ${u.username}, ${isRecentlyActive(u.lastLoginAt) ? 'online' : 'offline'}`}
         >
           <span className="avatar">
-            {u.username.slice(0, 2).toUpperCase()}
+            {(u.username || '?').slice(0, 2).toUpperCase()}
             {isRecentlyActive(u.lastLoginAt) && <span className="online-dot" />}
           </span>
           <span className="user-list-meta">
-            <span className="user-list-name">{u.username}</span>
+            <span className="user-list-name">{u.username || 'Unknown user'}</span>
             <span className="user-list-lastseen">{formatShortLastSeen(u.lastLoginAt)}</span>
           </span>
         </button>

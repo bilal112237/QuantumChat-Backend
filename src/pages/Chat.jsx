@@ -23,6 +23,11 @@ export default function Chat() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [importError, setImportError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  const messageListRef = useRef(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
   const keyFileInputRef = useRef(null);
@@ -59,8 +64,9 @@ export default function Chat() {
 
   const decorate = useCallback(
     (raw) => {
-      const isMine = raw.from === user.id;
+      const isMine = String(raw.from) === String(user.id);
       const envelope = isMine ? raw.forSender : raw.forRecipient;
+      if (!envelope?.targetPublicKey) return { ...raw, text: null };
       const mySecretKey = resolveMySecretKey(envelope.targetPublicKey);
       const text = mySecretKey ? unsealMessage(envelope, mySecretKey) : null;
       return { ...raw, text };
@@ -81,15 +87,16 @@ export default function Chat() {
     if (!hasLocalKeyring) return;
     connectSocket();
     const socket = getSocket();
+    if (!socket) return undefined;
 
     function handleIncoming(raw) {
       const current = selectedUserRef.current;
-      const otherId = raw.from === user.id ? raw.to : raw.from;
-      if (!current || current.id !== otherId) return;
+      const otherId = String(raw.from) === String(user.id) ? raw.to : raw.from;
+      if (!current || String(current.id) !== String(otherId)) return;
 
       setMessages((prev) => {
         const next = [...prev, decorate(raw)];
-        
+
         // Conditional scroll context
         if (messageListRef.current) {
           const el = messageListRef.current;
@@ -116,18 +123,33 @@ export default function Chat() {
     if (!selectedUser || !hasLocalKeyring) return undefined;
 
     let cancelled = false;
+    let firstLoad = true;
     const fetchMessages = () => {
-      client.get(`/messages/${selectedUser.id}`).then((res) => {
-        if (cancelled) return;
-        const next = res.data.data.map(decorate);
-        // Skip the state update (and the auto-scroll-to-bottom it triggers)
-        // when polling turns up nothing new — otherwise re-reading history
-        // gets yanked back to the bottom every 3 seconds.
-        setMessages((prev) => {
-          const same = prev.length === next.length && prev.every((m, i) => (m.id || m._id) === (next[i].id || next[i]._id));
-          return same ? prev : next;
+      if (firstLoad) setLoadingMessages(true);
+      client
+        .get(`/messages/${selectedUser.id}`)
+        .then((res) => {
+          if (cancelled) return;
+          const next = res.data.data.map(decorate);
+          // Skip the state update (and the auto-scroll-to-bottom it triggers)
+          // when polling turns up nothing new — otherwise re-reading history
+          // gets yanked back to the bottom every 3 seconds.
+          setMessages((prev) => {
+            const same =
+              prev.length === next.length &&
+              prev.every((m, i) => (m.id || m._id) === (next[i].id || next[i]._id));
+            return same ? prev : next;
+          });
+          if (firstLoad) {
+            setTimeout(() => scrollToBottom('auto'), 50);
+          }
+        })
+        .finally(() => {
+          if (firstLoad) {
+            setLoadingMessages(false);
+            firstLoad = false;
+          }
         });
-      });
     };
 
     fetchMessages();
@@ -136,7 +158,7 @@ export default function Chat() {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [selectedUser, hasLocalKeyring, decorate]);
+  }, [selectedUser, hasLocalKeyring, decorate, scrollToBottom]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
