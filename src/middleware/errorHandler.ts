@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { logger } from '../config/logger';
 import { config } from '../config';
 
+
 export class AppError extends Error {
   constructor(
     public statusCode: number,
