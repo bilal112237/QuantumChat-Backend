@@ -31,6 +31,7 @@ export default function ConversationList({
   onHide,
   onBlock,
   loading,
+  searchQuery = '',
 }) {
   return (
     <div className="conversation-panel">
@@ -154,11 +155,13 @@ export default function ConversationList({
           ))}
           {conversations.length === 0 && (
             <p className="empty-hint">
-              {filter === 'unread'
-                ? 'No unread conversations.'
-                : filter === 'groups'
-                  ? 'No groups yet. Create one to get started.'
-                  : 'No conversations yet.'}
+              {searchQuery.trim()
+                ? 'No users or groups match your search.'
+                : filter === 'unread'
+                  ? 'No unread conversations.'
+                  : filter === 'groups'
+                    ? 'No groups yet. Create one to get started.'
+                    : 'No conversations yet.'}
             </p>
           )}
         </div>

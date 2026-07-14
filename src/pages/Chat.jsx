@@ -19,7 +19,8 @@ import ConversationList from '../components/ConversationList.jsx';
 import CreateGroupModal from '../components/CreateGroupModal.jsx';
 import MessageBubble from '../components/MessageBubble.jsx';
 import EmojiPicker from '../components/EmojiPicker.jsx';
-import ThemeToggle from '../components/ThemeToggle.jsx';
+import SidebarMenu from '../components/SidebarMenu.jsx';
+import SettingsModal from '../components/SettingsModal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { getHiddenChatIds, hideChat, unhideChat } from '../utils/hiddenChats.js';
 
@@ -58,6 +59,7 @@ export default function Chat() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [importError, setImportError] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -180,13 +182,20 @@ export default function Chat() {
   const loadDirectory = useCallback(() => {
     if (!hasLocalKeyring) return;
     setLoadingUsers(true);
-    Promise.all([client.get('/users'), client.get('/groups')])
-      .then(([usersRes, groupsRes]) => {
-        setUsers(usersRes.data.data || []);
-        setGroups(groupsRes.data.data || []);
-      })
-      .catch((err) => setError(err.response?.data?.error || 'Failed to load conversations'))
-      .finally(() => setLoadingUsers(false));
+
+    // Load users and groups independently so a groups API failure
+    // cannot leave the people list empty.
+    const usersReq = client
+      .get('/users')
+      .then((res) => setUsers(res.data.data || []))
+      .catch((err) => setError(err.response?.data?.error || 'Failed to load users'));
+
+    const groupsReq = client
+      .get('/groups')
+      .then((res) => setGroups(res.data.data || []))
+      .catch(() => setGroups([]));
+
+    Promise.allSettled([usersReq, groupsReq]).finally(() => setLoadingUsers(false));
   }, [hasLocalKeyring]);
 
   useEffect(() => {
@@ -374,6 +383,7 @@ export default function Chat() {
         id: u.id,
         title: u.username || 'Unknown user',
         subtitle: null,
+        searchText: `${u.username || ''} ${u.email || ''}`.toLowerCase(),
         lastLoginAt: u.lastLoginAt,
         unread,
         sortAt: activity?.at || u.lastLoginAt || '',
@@ -392,6 +402,7 @@ export default function Chat() {
         id: g.id,
         title: g.name,
         subtitle: `${memberCount} member${memberCount === 1 ? '' : 's'}`,
+        searchText: (g.name || '').toLowerCase(),
         lastLoginAt: g.updatedAt,
         unread,
         sortAt: activity?.at || g.updatedAt || g.createdAt || '',
@@ -408,7 +419,7 @@ export default function Chat() {
       if (c.type === 'dm' && !q && hidden.has(String(c.id))) return false;
       if (filter === 'groups' && c.type !== 'group') return false;
       if (filter === 'unread' && !c.unread) return false;
-      if (q && !(c.title || '').toLowerCase().includes(q)) return false;
+      if (q && !(c.searchText || '').includes(q)) return false;
       return true;
     });
   }, [users, groups, user.id, search, filter, activityTick, hiddenChatIds]);
@@ -876,10 +887,7 @@ export default function Chat() {
             </div>
           </div>
           <div className="sidebar-header-actions">
-            <ThemeToggle />
-            <button className="link-button" onClick={logout} aria-label="Log out of application">
-              Log out
-            </button>
+            <SidebarMenu onSettings={() => setShowSettings(true)} onLogout={logout} />
           </div>
         </div>
         {canChat && (
@@ -903,6 +911,7 @@ export default function Chat() {
             onHide={handleHideChat}
             onBlock={handleBlockUser}
             loading={loadingUsers}
+            searchQuery={search}
           />
         ) : (
           <p className="empty-hint">Set up your device key to see people.</p>
@@ -1147,6 +1156,15 @@ export default function Chat() {
           users={users}
           onClose={() => setShowCreateGroup(false)}
           onCreate={handleCreateGroup}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsModal
+          user={user}
+          onClose={() => setShowSettings(false)}
+          onImportKeys={handleImportKeyFile}
+          onGenerateKeys={handleGenerateKeys}
         />
       )}
     </div>
