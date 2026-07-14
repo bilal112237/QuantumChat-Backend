@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ================================================================
    QuantumChat — Premium Design System
    Soft glass, deep-navy dark, sky-blue light. Not Telegram/WhatsApp.
