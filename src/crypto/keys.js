@@ -108,3 +108,23 @@ export function unsealBytes(cipherBytes, envelope, myPrivateKeyHex) {
   const nonce = decodeBase64(envelope.nonce);
   return nacl.box.open(cipherBytes, nonce, fromHex(envelope.ephemeralPublicKey), fromHex(myPrivateKeyHex));
 }
+
+/** Symmetric encryption for group file blobs — key is distributed via sealed message envelopes. */
+export function secretboxSeal(bytes) {
+  const key = nacl.randomBytes(nacl.secretbox.keyLength);
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+  const cipherBytes = nacl.secretbox(bytes, nonce, key);
+  return {
+    cipherBytes,
+    nonce: encodeBase64(nonce),
+    key: encodeBase64(key),
+  };
+}
+
+export function secretboxOpen(cipherBytes, nonceB64, keyB64) {
+  try {
+    return nacl.secretbox.open(cipherBytes, decodeBase64(nonceB64), decodeBase64(keyB64));
+  } catch {
+    return null;
+  }
+}

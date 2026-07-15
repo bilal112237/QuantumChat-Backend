@@ -4994,3 +4994,381 @@ button.message-reply-preview:hover {
 .read-receipt.sending {
   opacity: 0.55;
 }
+
+/* ================================================================
+   GROUP SETTINGS / POLLS / EVENTS / MENTIONS
+   ================================================================ */
+.group-settings-modal {
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.group-settings-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 4px 12px;
+  border-bottom: 1px solid var(--border-glass);
+  margin-bottom: 12px;
+}
+
+.group-settings-tab {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.group-settings-tab.active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.group-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.group-photo-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: var(--accent-muted);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-weight: 700;
+}
+
+.group-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-desc-input {
+  resize: vertical;
+  min-height: 72px;
+  border-radius: var(--radius-md) !important;
+}
+
+.group-settings-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.group-settings-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-danger-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-glass);
+}
+
+.btn-danger,
+.btn-danger-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+}
+
+.btn-danger {
+  background: #c62828;
+  color: #fff;
+}
+
+.btn-danger-outline {
+  border: 1px solid color-mix(in srgb, #c62828 50%, transparent);
+  color: #c62828;
+}
+
+.group-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.group-member-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg-glass)) 80%, transparent);
+}
+
+.group-member-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.group-member-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.group-member-actions button {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+}
+
+.group-member-actions button:hover {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.group-invite-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+  background: var(--bg-glass);
+}
+
+.group-invite-box code {
+  flex: 1;
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.group-invite-actions,
+.join-invite-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.group-shared-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group-shared-files li {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.group-kind-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--accent-muted);
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.group-announcement,
+.group-event-card,
+.group-poll-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.group-event-row,
+.group-event-notes,
+.group-poll-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.group-poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.group-poll-option {
+  position: relative;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+  overflow: hidden;
+  background: transparent;
+}
+
+.group-poll-option.selected {
+  border-color: var(--accent);
+}
+
+.group-poll-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent-muted);
+  z-index: 0;
+}
+
+.group-poll-label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.group-poll-label em {
+  font-style: normal;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.mention-chip {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.mention-suggestions {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% - 8px);
+  z-index: 20;
+  background: var(--bg-elevated, var(--bg-glass));
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.mention-suggestions button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.mention-suggestions button:hover {
+  background: var(--accent-muted);
+}
+
+.group-composer-tools {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 52px;
+  z-index: 25;
+  background: var(--bg-elevated, var(--bg-glass));
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  min-width: 180px;
+  padding: 6px;
+}
+
+.group-composer-tools button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.group-composer-tools button:hover {
+  background: var(--accent-muted);
+}
+
+.group-admin-lock {
+  margin: 0 16px 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--accent-muted);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.join-invite-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-app);
+}
+
+.join-invite-card {
+  width: min(420px, 100%);
+  padding: 28px 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.join-invite-card h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.join-invite-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.chat-header-peer.clickable {
+  cursor: pointer;
+}
+
+.attachment-audio {
+  max-width: 240px;
+}

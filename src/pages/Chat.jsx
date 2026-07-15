@@ -2,23 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowDown,
+  BarChart2,
+  Calendar,
   Camera,
+  Megaphone,
   Menu,
   MessageSquare,
   Mic,
   Paperclip,
   Pin,
+  Search,
   Send,
+  Settings2,
   Smile,
   Square,
   Users,
   X,
-  Search,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import client from '../api/client.js';
 import { connectSocket, getSocket } from '../api/socket.js';
-import { sealMessage, unsealMessage, sealBytes, pickRandom } from '../crypto/keys.js';
+import { sealMessage, unsealMessage, sealBytes, secretboxSeal, pickRandom } from '../crypto/keys.js';
 import { formatKeyFile, downloadKeyFile, parseKeyFile } from '../crypto/keyFile.js';
 import { getCurrentKeySet, findSecretKeyForPublicKey } from '../crypto/keyStorage.js';
 import { normalizeAttachment, pickRecorderMimeType, attachmentIdOf } from '../crypto/voiceCache.js';
@@ -31,8 +35,17 @@ import {
   markConversationRead,
   setConversationActivity,
 } from '../utils/readState.js';
+import {
+  encodePoll,
+  encodeEvent,
+  encodeAnnouncement,
+  encodeGroupFile,
+  extractMentions,
+  isGroupAdmin,
+} from '../utils/groupPayload.js';
 import ConversationList from '../components/ConversationList.jsx';
 import CreateGroupModal from '../components/CreateGroupModal.jsx';
+import GroupSettingsModal from '../components/GroupSettingsModal.jsx';
 import MessageBubble from '../components/MessageBubble.jsx';
 import EmojiPicker from '../components/EmojiPicker.jsx';
 import SidebarMenu from '../components/SidebarMenu.jsx';
@@ -142,6 +155,13 @@ export default function Chat() {
   const [uploads, setUploads] = useState([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [gallery, setGallery] = useState(null);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [groupComposerMenu, setGroupComposerMenu] = useState(null);
+  const [pollDraft, setPollDraft] = useState(null);
+  const [eventDraft, setEventDraft] = useState(null);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [pendingAnnouncement, setPendingAnnouncement] = useState(false);
 
   const messageListRef = useRef(null);
   const bottomRef = useRef(null);
@@ -399,6 +419,62 @@ export default function Chat() {
       });
     }
 
+    function handleGroupUpdated(payload) {
+      if (!payload?.id) return;
+      setGroups((prev) => {
+        if (prev.some((g) => String(g.id) === String(payload.id))) {
+          return prev.map((g) => (String(g.id) === String(payload.id) ? payload : g));
+        }
+        return [payload, ...prev];
+      });
+      const current = selectedRef.current;
+      if (current?.type === 'group' && String(current.id) === String(payload.id)) {
+        const memberCount = (payload.members || []).length;
+        const desc = (payload.description || '').trim();
+        setSelected((prev) =>
+          prev
+            ? {
+                ...prev,
+                group: payload,
+                title: payload.name || prev.title,
+                subtitle: desc
+                  ? desc.slice(0, 60) + (desc.length > 60 ? '…' : '')
+                  : `${memberCount} member${memberCount === 1 ? '' : 's'}`,
+              }
+            : prev
+        );
+        setPinnedIds((payload.pinnedMessageIds || []).map(String));
+      }
+    }
+
+    function handleGroupDeleted({ id } = {}) {
+      if (!id) return;
+      setGroups((prev) => prev.filter((g) => String(g.id) !== String(id)));
+      const current = selectedRef.current;
+      if (current?.type === 'group' && String(current.id) === String(id)) {
+        setSelected(null);
+        setMessages([]);
+        setShowGroupSettings(false);
+      }
+    }
+
+    function handlePollUpdate(raw) {
+      const id = String(raw?.id || raw?._id || '');
+      if (!id) return;
+      if (!isCurrentConversation(raw)) return;
+      setMessages((prev) =>
+        prev.map((m) => (String(m.id || m._id) === id ? { ...decorate(raw), pollVotes: raw.pollVotes || [] } : m))
+      );
+    }
+
+    function handleMentionNew({ from } = {}) {
+      const username =
+        String(from) === String(user.id)
+          ? user.username
+          : users.find((u) => String(u.id) === String(from))?.username;
+      showToast(`${username || 'Someone'} mentioned you`);
+    }
+
     function handleTypingStart({ from } = {}) {
       const current = selectedRef.current;
       if (!current || current.type !== 'dm') return;
@@ -471,6 +547,10 @@ export default function Chat() {
     socket.on('message:reaction', handleReaction);
     socket.on('message:edited', handleEdited);
     socket.on('group:new', handleGroupNew);
+    socket.on('group:updated', handleGroupUpdated);
+    socket.on('group:deleted', handleGroupDeleted);
+    socket.on('message:poll', handlePollUpdate);
+    socket.on('mention:new', handleMentionNew);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('presence:snapshot', handlePresenceSnapshot);
@@ -482,6 +562,10 @@ export default function Chat() {
       socket.off('message:reaction', handleReaction);
       socket.off('message:edited', handleEdited);
       socket.off('group:new', handleGroupNew);
+      socket.off('group:updated', handleGroupUpdated);
+      socket.off('group:deleted', handleGroupDeleted);
+      socket.off('message:poll', handlePollUpdate);
+      socket.off('mention:new', handleMentionNew);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
       socket.off('presence:snapshot', handlePresenceSnapshot);
@@ -489,7 +573,7 @@ export default function Chat() {
       socket.off('message:status', handleMessageStatus);
       clearTimeout(typingPeerTimeoutRef.current);
     };
-  }, [hasLocalKeyring, user, decorate, scrollToBottom, recordActivityFromMessage, bumpActivity]);
+  }, [hasLocalKeyring, user, users, decorate, scrollToBottom, recordActivityFromMessage, bumpActivity, showToast]);
 
   useEffect(() => {
     if (!selected || !hasLocalKeyring) return undefined;
@@ -498,7 +582,11 @@ export default function Chat() {
     setPeerTyping(false);
     setHasMoreMessages(false);
     oldestCreatedAtRef.current = null;
-    setPinnedIds(getPinnedIds(user.id, selected.key));
+    if (selected.type === 'group') {
+      setPinnedIds((selected.group?.pinnedMessageIds || []).map(String));
+    } else {
+      setPinnedIds(getPinnedIds(user.id, selected.key));
+    }
 
     const endpoint =
       selected.type === 'group' ? `/groups/${selected.id}/messages` : `/messages/${selected.id}`;
@@ -621,13 +709,16 @@ export default function Chat() {
       const activity = getConversationActivity(user.id, key);
       const unread = isUnreadConversation(user.id, key, activity?.at, activity?.from);
       const memberCount = (g.members || []).length;
+      const desc = (g.description || '').trim();
       items.push({
         key,
         type: 'group',
         id: g.id,
         title: g.name,
-        subtitle: `${memberCount} member${memberCount === 1 ? '' : 's'}`,
-        searchText: (g.name || '').toLowerCase(),
+        subtitle: desc
+          ? desc.slice(0, 48) + (desc.length > 48 ? '…' : '')
+          : `${memberCount} member${memberCount === 1 ? '' : 's'}`,
+        searchText: `${g.name || ''} ${g.description || ''}`.toLowerCase(),
         lastLoginAt: g.updatedAt,
         unread,
         sortAt: activity?.at || g.updatedAt || g.createdAt || '',
@@ -671,6 +762,10 @@ export default function Chat() {
     setSearchOpen(false);
     setSidebarOpen(false);
     setGallery(null);
+    setGroupComposerMenu(null);
+    setMentionOpen(false);
+    setPendingAnnouncement(false);
+    setShowGroupSettings(false);
     imageSrcMapRef.current = new Map();
     markConversationRead(user.id, c.key);
     bumpActivity();
@@ -711,6 +806,28 @@ export default function Chat() {
       envelopes.push({ user: id, ...sealMessage(plaintext, publicKey) });
     }
     return envelopes;
+  }
+
+  async function sendGroupPayload(plaintext, { kind, mentionedUserIds } = {}) {
+    if (!selected || selected.type !== 'group') {
+      throw new Error('No group selected');
+    }
+    const group = selected.group || groups.find((g) => String(g.id) === String(selected.id));
+    if (!group) {
+      throw new Error('Group not found');
+    }
+    const envelopes = sealGroupEnvelopes(plaintext, group);
+    const payload = { envelopes, kind: kind || 'text' };
+    if (mentionedUserIds?.length) payload.mentionedUserIds = mentionedUserIds;
+    if (replyTo) payload.replyTo = replyTo.id || replyTo._id;
+    const { data } = await client.post(`/groups/${selected.id}/messages`, payload);
+    recordActivityFromMessage(data.data);
+    setMessages((prev) => {
+      const id = String(data.data.id || data.data._id);
+      if (prev.some((m) => String(m.id || m._id) === id)) return prev;
+      return [...prev, decorate(data.data)];
+    });
+    return data.data;
   }
 
   function handleHideChat(u) {
@@ -779,7 +896,23 @@ export default function Chat() {
 
   // Textarea composition handlers
   function handleDraftChange(e) {
-    setDraft(e.target.value);
+    const value = e.target.value;
+    setDraft(value);
+
+    if (selected?.type === 'group') {
+      const atMatch = value.match(/(^|\s)@([a-zA-Z0-9_.-]{0,32})$/);
+      if (atMatch) {
+        setMentionQuery(atMatch[2].toLowerCase());
+        setMentionOpen(true);
+      } else {
+        setMentionOpen(false);
+        setMentionQuery('');
+      }
+    } else {
+      setMentionOpen(false);
+      setMentionQuery('');
+    }
+
     if (!selected || selected.type !== 'dm') return;
     const socket = getSocket();
     if (!socket) return;
@@ -789,6 +922,13 @@ export default function Chat() {
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit('typing:stop', { to: selected.id });
     }, 2000);
+  }
+
+  function insertMention(username) {
+    setDraft((prev) => prev.replace(/@([a-zA-Z0-9_.-]{0,32})$/, `@${username} `));
+    setMentionOpen(false);
+    setMentionQuery('');
+    textareaRef.current?.focus();
   }
 
   function handleTextareaInput(e) {
@@ -860,16 +1000,17 @@ export default function Chat() {
           showToast('Group not found', 'error');
           return;
         }
-        const envelopes = sealGroupEnvelopes(draft, group);
-        const payload = { envelopes };
-        if (replyTo) payload.replyTo = replyTo.id || replyTo._id;
-        const { data } = await client.post(`/groups/${selected.id}/messages`, payload);
-        recordActivityFromMessage(data.data);
-        setMessages((prev) => {
-          const id = String(data.data.id || data.data._id);
-          if (prev.some((m) => String(m.id || m._id) === id)) return prev;
-          return [...prev, decorate(data.data)];
+        const asAnnouncement = pendingAnnouncement || draft.trim().startsWith('/announce');
+        const bodyText = asAnnouncement
+          ? draft.trim().replace(/^\/announce\s*/i, '')
+          : draft;
+        const plaintext = asAnnouncement ? encodeAnnouncement(bodyText) : bodyText;
+        const mentionedUserIds = extractMentions(bodyText, group.members || []);
+        await sendGroupPayload(plaintext, {
+          kind: asAnnouncement ? 'announcement' : 'text',
+          mentionedUserIds,
         });
+        setPendingAnnouncement(false);
       } else {
         const peer = selected.peer || users.find((u) => String(u.id) === String(selected.id));
         const myKey = pickRandom(getCurrentKeySet(user.id));
@@ -892,6 +1033,7 @@ export default function Chat() {
       }
       setDraft('');
       setReplyTo(null);
+      setMentionOpen(false);
       playSendSound();
       markConversationRead(user.id, selected.key);
       bumpActivity();
@@ -903,49 +1045,85 @@ export default function Chat() {
   }
 
   async function sendAttachmentFile(file, { plainBytes, quiet } = {}) {
-    if (!file || !selected || selected.type !== 'dm') return;
+    if (!file || !selected || (selected.type !== 'dm' && selected.type !== 'group')) return;
 
     if (file.size > MAX_FILE_SIZE) {
       showToast(`File too large (${formatFileSize(file.size)}). Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`, 'error');
       return;
     }
 
-    const peer = selected.peer || users.find((u) => String(u.id) === String(selected.id));
-    const myKey = pickRandom(getCurrentKeySet(user.id));
-    const recipientKeys = (peer?.publicKeys || []).filter(Boolean);
-    if (!myKey?.publicKey || recipientKeys.length === 0) {
-      showToast('Missing encryption keys for this conversation', 'error');
-      return;
-    }
-    const recipientPublicKey = pickRandom(recipientKeys);
-    const fileBytes = plainBytes || new Uint8Array(await file.arrayBuffer());
-    const forRecipientFile = sealBytes(fileBytes, recipientPublicKey);
-    const forSenderFile = sealBytes(fileBytes, myKey.publicKey);
-
     const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const controller = new AbortController();
     setUploads((prev) => [...prev, { id: uploadId, name: file.name, progress: 0, controller }]);
 
-    const formData = new FormData();
-    formData.append(
-      'file',
-      new Blob([forRecipientFile.cipherBytes], { type: file.type || 'application/octet-stream' }),
-      file.name
-    );
-    formData.append(
-      'senderFile',
-      new Blob([forSenderFile.cipherBytes], { type: file.type || 'application/octet-stream' }),
-      file.name
-    );
-    formData.append('recipientId', selected.id);
-    formData.append('nonce', forRecipientFile.nonce);
-    formData.append('ephemeralPublicKey', forRecipientFile.ephemeralPublicKey);
-    formData.append('targetPublicKey', forRecipientFile.targetPublicKey);
-    formData.append('forSenderNonce', forSenderFile.nonce);
-    formData.append('forSenderEphemeralPublicKey', forSenderFile.ephemeralPublicKey);
-    formData.append('forSenderTargetPublicKey', forSenderFile.targetPublicKey);
-
     try {
+      if (selected.type === 'group') {
+        const fileBytes = plainBytes || new Uint8Array(await file.arrayBuffer());
+        const sealed = secretboxSeal(fileBytes);
+        const formData = new FormData();
+        formData.append(
+          'file',
+          new Blob([sealed.cipherBytes], { type: file.type || 'application/octet-stream' }),
+          file.name
+        );
+        formData.append('groupId', selected.id);
+        formData.append('secretboxNonce', sealed.nonce);
+
+        const uploadRes = await client.post('/attachments', formData, {
+          signal: controller.signal,
+          onUploadProgress: (event) => {
+            if (!event.total) return;
+            const progress = Math.min(100, Math.round((event.loaded / event.total) * 100));
+            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, progress } : u)));
+          },
+        });
+        const attachment = uploadRes.data.data;
+        const plaintext = encodeGroupFile({
+          attachmentId: attachment.id,
+          key: sealed.key,
+          nonce: sealed.nonce,
+          filename: attachment.filename || file.name,
+          mimetype: attachment.mimetype || file.type || 'application/octet-stream',
+          size: attachment.size || file.size,
+        });
+        await sendGroupPayload(plaintext, { kind: 'file' });
+        playSendSound();
+        if (!quiet) showToast('File sent successfully', 'success', 3000);
+        setTimeout(() => scrollToBottom('smooth'), 50);
+        return;
+      }
+
+      const peer = selected.peer || users.find((u) => String(u.id) === String(selected.id));
+      const myKey = pickRandom(getCurrentKeySet(user.id));
+      const recipientKeys = (peer?.publicKeys || []).filter(Boolean);
+      if (!myKey?.publicKey || recipientKeys.length === 0) {
+        showToast('Missing encryption keys for this conversation', 'error');
+        return;
+      }
+      const recipientPublicKey = pickRandom(recipientKeys);
+      const fileBytes = plainBytes || new Uint8Array(await file.arrayBuffer());
+      const forRecipientFile = sealBytes(fileBytes, recipientPublicKey);
+      const forSenderFile = sealBytes(fileBytes, myKey.publicKey);
+
+      const formData = new FormData();
+      formData.append(
+        'file',
+        new Blob([forRecipientFile.cipherBytes], { type: file.type || 'application/octet-stream' }),
+        file.name
+      );
+      formData.append(
+        'senderFile',
+        new Blob([forSenderFile.cipherBytes], { type: file.type || 'application/octet-stream' }),
+        file.name
+      );
+      formData.append('recipientId', selected.id);
+      formData.append('nonce', forRecipientFile.nonce);
+      formData.append('ephemeralPublicKey', forRecipientFile.ephemeralPublicKey);
+      formData.append('targetPublicKey', forRecipientFile.targetPublicKey);
+      formData.append('forSenderNonce', forSenderFile.nonce);
+      formData.append('forSenderEphemeralPublicKey', forSenderFile.ephemeralPublicKey);
+      formData.append('forSenderTargetPublicKey', forSenderFile.targetPublicKey);
+
       const uploadRes = await client.post('/attachments', formData, {
         signal: controller.signal,
         onUploadProgress: (event) => {
@@ -995,7 +1173,7 @@ export default function Chat() {
   async function sendAttachmentFiles(filesOrFile) {
     const list = Array.isArray(filesOrFile) ? filesOrFile : filesOrFile ? [filesOrFile] : [];
     const files = list.filter(Boolean);
-    if (!files.length || !selected || selected.type !== 'dm') return;
+    if (!files.length || !selected || (selected.type !== 'dm' && selected.type !== 'group')) return;
 
     let ok = 0;
     let failed = 0;
@@ -1016,12 +1194,12 @@ export default function Chat() {
   async function handleFileChange(e) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!files.length || !selected || selected.type !== 'dm') return;
+    if (!files.length || !selected || (selected.type !== 'dm' && selected.type !== 'group')) return;
     await sendAttachmentFiles(files);
   }
 
   function handlePaste(e) {
-    if (!selected || selected.type !== 'dm' || sendingVoice || recording) return;
+    if (!selected || (selected.type !== 'dm' && selected.type !== 'group') || sendingVoice || recording) return;
     const items = e.clipboardData?.items;
     if (!items?.length) return;
     const imageFiles = [];
@@ -1113,7 +1291,7 @@ export default function Chat() {
   }
 
   async function startVoiceRecording() {
-    if (!selected || selected.type !== 'dm' || recording || sendingVoice) return;
+    if (!selected || (selected.type !== 'dm' && selected.type !== 'group') || recording || sendingVoice) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       showToast('Voice notes are not supported in this browser', 'error');
       return;
@@ -1253,10 +1431,43 @@ export default function Chat() {
     setExtrasTick((n) => n + 1);
   }
 
-  function handlePinMessage(messageId) {
+  async function handlePinMessage(messageId) {
     if (!selected?.key) return;
+    if (selected.type === 'group') {
+      const pinned = (selected.group?.pinnedMessageIds || []).map(String);
+      const isPinned = pinned.includes(String(messageId));
+      try {
+        const { data } = isPinned
+          ? await client.delete(`/groups/${selected.id}/pins/${messageId}`)
+          : await client.post(`/groups/${selected.id}/pins/${messageId}`);
+        const group = data.data;
+        setGroups((prev) => prev.map((g) => (String(g.id) === String(group.id) ? group : g)));
+        setSelected((prev) => (prev ? { ...prev, group, title: group.name || prev.title } : prev));
+        setPinnedIds((group.pinnedMessageIds || []).map(String));
+        setExtrasTick((n) => n + 1);
+      } catch (err) {
+        showToast(err.response?.data?.error || 'Failed to update pin', 'error');
+      }
+      return;
+    }
     setPinnedIds(togglePinnedMessage(user.id, selected.key, messageId));
     setExtrasTick((n) => n + 1);
+  }
+
+  async function handleVotePoll(messageId, optionIndex) {
+    if (!messageId || optionIndex == null || selected?.type !== 'group') return;
+    try {
+      const { data } = await client.post(`/groups/messages/${messageId}/poll-vote`, { optionIndex });
+      setMessages((prev) =>
+        prev.map((m) =>
+          String(m.id || m._id) === String(messageId)
+            ? { ...decorate(data.data), pollVotes: data.data.pollVotes || [] }
+            : m
+        )
+      );
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to vote', 'error');
+    }
   }
 
   function handleJumpToReply(replyId) {
@@ -1430,6 +1641,8 @@ export default function Chat() {
     if (!selected) return null;
     if (selected.type === 'group') {
       const group = selected.group || groups.find((g) => String(g.id) === String(selected.id));
+      const desc = (group?.description || '').trim();
+      if (desc) return desc.length > 72 ? `${desc.slice(0, 72)}…` : desc;
       const count = (group?.members || []).length;
       return count ? `${count} members` : 'Group chat';
     }
@@ -1438,6 +1651,93 @@ export default function Chat() {
     const peer = selected.peer || users.find((u) => String(u.id) === String(selected.id));
     return formatLastSeen(peer?.lastLoginAt);
   }, [selected, groups, users, onlineUserIds, peerTyping]);
+
+  const activeGroup = useMemo(() => {
+    if (!selected || selected.type !== 'group') return null;
+    return selected.group || groups.find((g) => String(g.id) === String(selected.id)) || null;
+  }, [selected, groups]);
+
+  const canPostInGroup = useMemo(() => {
+    if (!activeGroup) return true;
+    if (!activeGroup.onlyAdminsCanPost) return true;
+    return isGroupAdmin(activeGroup, user.id);
+  }, [activeGroup, user.id]);
+
+  const mentionSuggestions = useMemo(() => {
+    if (!mentionOpen || !activeGroup) return [];
+    const q = mentionQuery || '';
+    return (activeGroup.members || [])
+      .filter((m) => {
+        const id = memberId(m);
+        if (String(id) === String(user.id)) return false;
+        const name = (m.username || '').toLowerCase();
+        return !q || name.startsWith(q);
+      })
+      .slice(0, 6);
+  }, [mentionOpen, mentionQuery, activeGroup, user.id]);
+
+  async function submitPollDraft(e) {
+    e?.preventDefault?.();
+    if (!pollDraft || !selected || selected.type !== 'group') return;
+    const options = (pollDraft.options || []).map((o) => o.trim()).filter(Boolean);
+    if (!pollDraft.question.trim() || options.length < 2) {
+      showToast('Poll needs a question and at least 2 options', 'error');
+      return;
+    }
+    try {
+      await sendGroupPayload(encodePoll({ question: pollDraft.question, options }), { kind: 'poll' });
+      setPollDraft(null);
+      playSendSound();
+      setTimeout(() => scrollToBottom('smooth'), 50);
+    } catch (err) {
+      showToast(err.response?.data?.error || err.message || 'Failed to create poll', 'error');
+    }
+  }
+
+  async function submitEventDraft(e) {
+    e?.preventDefault?.();
+    if (!eventDraft || !selected || selected.type !== 'group') return;
+    if (!eventDraft.title.trim()) {
+      showToast('Event needs a title', 'error');
+      return;
+    }
+    try {
+      await sendGroupPayload(encodeEvent(eventDraft), { kind: 'event' });
+      setEventDraft(null);
+      playSendSound();
+      setTimeout(() => scrollToBottom('smooth'), 50);
+    } catch (err) {
+      showToast(err.response?.data?.error || err.message || 'Failed to create event', 'error');
+    }
+  }
+
+  function mergeUpdatedGroup(group) {
+    if (!group?.id) return;
+    setGroups((prev) => prev.map((g) => (String(g.id) === String(group.id) ? group : g)));
+    setSelected((prev) => {
+      if (!prev || prev.type !== 'group' || String(prev.id) !== String(group.id)) return prev;
+      const memberCount = (group.members || []).length;
+      const desc = (group.description || '').trim();
+      return {
+        ...prev,
+        group,
+        title: group.name || prev.title,
+        subtitle: desc
+          ? desc.slice(0, 60) + (desc.length > 60 ? '…' : '')
+          : `${memberCount} member${memberCount === 1 ? '' : 's'}`,
+      };
+    });
+    setPinnedIds((group.pinnedMessageIds || []).map(String));
+  }
+
+  function handleLeftOrDeletedGroup(groupId) {
+    setGroups((prev) => prev.filter((g) => String(g.id) !== String(groupId)));
+    if (selected?.type === 'group' && String(selected.id) === String(groupId)) {
+      setSelected(null);
+      setMessages([]);
+    }
+    setShowGroupSettings(false);
+  }
 
   const headerOnline = useMemo(() => {
     if (!selected || selected.type !== 'dm') return false;
@@ -1539,10 +1839,10 @@ export default function Chat() {
 
       <main
         className="chat-main"
-        onDragEnter={canChat && selected && selected.type === 'dm' ? handleDragEnter : undefined}
-        onDragLeave={canChat && selected && selected.type === 'dm' ? handleDragLeave : undefined}
-        onDragOver={canChat && selected && selected.type === 'dm' ? handleDragOver : undefined}
-        onDrop={canChat && selected && selected.type === 'dm' ? handleDrop : undefined}
+        onDragEnter={canChat && selected && (selected.type === 'dm' || selected.type === 'group') ? handleDragEnter : undefined}
+        onDragLeave={canChat && selected && (selected.type === 'dm' || selected.type === 'group') ? handleDragLeave : undefined}
+        onDragOver={canChat && selected && (selected.type === 'dm' || selected.type === 'group') ? handleDragOver : undefined}
+        onDrop={canChat && selected && (selected.type === 'dm' || selected.type === 'group') ? handleDrop : undefined}
       >
         {!canChat && (
           <div className="key-warning">
@@ -1574,7 +1874,23 @@ export default function Chat() {
                   <Menu size={20} strokeWidth={2} aria-hidden="true" />
                 </button>
                 {selected ? (
-                  <div className="chat-header-peer">
+                  <div
+                    className="chat-header-peer"
+                    role={selected.type === 'group' ? 'button' : undefined}
+                    tabIndex={selected.type === 'group' ? 0 : undefined}
+                    onClick={selected.type === 'group' ? () => setShowGroupSettings(true) : undefined}
+                    onKeyDown={
+                      selected.type === 'group'
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setShowGroupSettings(true);
+                            }
+                          }
+                        : undefined
+                    }
+                    style={selected.type === 'group' ? { cursor: 'pointer' } : undefined}
+                  >
                     <span className={`avatar ${selected.type === 'group' ? 'group-avatar' : ''} chat-header-avatar`}>
                       {selected.type === 'group' ? (
                         <Users size={18} strokeWidth={2} aria-hidden="true" />
@@ -1599,6 +1915,16 @@ export default function Chat() {
                 )}
               </div>
               <div className="chat-header-actions">
+                {selected?.type === 'group' && (
+                  <button
+                    className="chat-header-btn"
+                    onClick={() => setShowGroupSettings(true)}
+                    title="Group settings"
+                    aria-label="Group settings"
+                  >
+                    <Settings2 size={18} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                )}
                 {selected && (
                   <button
                     className="chat-header-btn"
@@ -1751,6 +2077,7 @@ export default function Chat() {
                               onForward={setForwardMessage}
                               onStar={handleStarMessage}
                               onPin={handlePinMessage}
+                              onVotePoll={isGroupChat ? handleVotePoll : undefined}
                               onJumpToReply={handleJumpToReply}
                               onImagePreview={handleImagePreview}
                               onImageReady={handleImageReady}
@@ -1758,11 +2085,15 @@ export default function Chat() {
                                 setEditingMessage(null);
                                 setReplyTo(msg);
                               }}
-                              onEdit={(msg) => {
-                                setReplyTo(null);
-                                setEditingMessage(msg);
-                                setDraft(msg.text || '');
-                              }}
+                              onEdit={
+                                m.text && !String(m.text).trim().startsWith('{"__qc')
+                                  ? (msg) => {
+                                      setReplyTo(null);
+                                      setEditingMessage(msg);
+                                      setDraft(msg.text || '');
+                                    }
+                                  : undefined
+                              }
                             />
                           </div>
                         );
@@ -1811,6 +2142,12 @@ export default function Chat() {
                       <Square size={16} fill="currentColor" strokeWidth={0} aria-hidden="true" />
                     </button>
                   </div>
+                ) : !canPostInGroup ? (
+                  <div className="composer-shell">
+                    <div className="composer-hint" style={{ justifyContent: 'center', padding: '14px' }}>
+                      Only admins can post in this group
+                    </div>
+                  </div>
                 ) : (
                   <div className="composer-shell">
                     {showEmojiPicker && (
@@ -1833,11 +2170,52 @@ export default function Chat() {
                           onClick={() => {
                             setReplyTo(null);
                             setEditingMessage(null);
+                            setPendingAnnouncement(false);
                             if (editingMessage) setDraft('');
                           }}
                         >
                           <X size={16} strokeWidth={2} aria-hidden="true" />
                         </button>
+                      </div>
+                    )}
+                    {pendingAnnouncement && !replyTo && !editingMessage && (
+                      <div className="composer-context">
+                        <div className="composer-context-copy">
+                          <strong>Announcement</strong>
+                          <span>Next send will post as an announcement</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="composer-context-close"
+                          aria-label="Cancel announcement mode"
+                          onClick={() => setPendingAnnouncement(false)}
+                        >
+                          <X size={16} strokeWidth={2} aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
+                    {mentionOpen && mentionSuggestions.length > 0 && (
+                      <div
+                        className="composer-context"
+                        style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}
+                      >
+                        {mentionSuggestions.map((m) => (
+                          <button
+                            key={memberId(m)}
+                            type="button"
+                            className="composer-context-close"
+                            style={{
+                              width: '100%',
+                              justifyContent: 'flex-start',
+                              borderRadius: 8,
+                              padding: '6px 10px',
+                              fontSize: 13,
+                            }}
+                            onClick={() => insertMention(m.username)}
+                          >
+                            @{m.username}
+                          </button>
+                        ))}
                       </div>
                     )}
                     <div className="composer-hint">
@@ -1846,28 +2224,122 @@ export default function Chat() {
                       <span><kbd>Ctrl</kbd>+<kbd>V</kbd> paste image</span>
                       <span style={{ marginLeft: 'auto', opacity: 0.6 }}>Max 15 MB · multi-file OK</span>
                     </div>
-                    <form className="composer" onSubmit={handleSend}>
-                      {!isGroupChat && (
-                        <>
+                    <form className="composer" onSubmit={handleSend} style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        className="attach-button"
+                        onClick={() => fileInputRef.current?.click()}
+                        aria-label="Attach files to message"
+                        disabled={sendingVoice || uploads.length > 0}
+                      >
+                        <Paperclip size={20} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="attach-button"
+                        onClick={() => setCameraOpen(true)}
+                        aria-label="Capture photo with camera"
+                        disabled={sendingVoice || uploads.length > 0}
+                      >
+                        <Camera size={20} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                      {isGroupChat && (
+                        <div style={{ position: 'relative' }}>
                           <button
                             type="button"
-                            className="attach-button"
-                            onClick={() => fileInputRef.current?.click()}
-                            aria-label="Attach files to message"
-                            disabled={sendingVoice || uploads.length > 0}
+                            className={`attach-button ${groupComposerMenu === 'tools' ? 'active' : ''}`}
+                            onClick={() =>
+                              setGroupComposerMenu((v) => (v === 'tools' ? null : 'tools'))
+                            }
+                            aria-label="Group tools"
+                            disabled={sendingVoice}
                           >
-                            <Paperclip size={20} strokeWidth={2} aria-hidden="true" />
+                            <Megaphone size={20} strokeWidth={2} aria-hidden="true" />
                           </button>
-                          <button
-                            type="button"
-                            className="attach-button"
-                            onClick={() => setCameraOpen(true)}
-                            aria-label="Capture photo with camera"
-                            disabled={sendingVoice || uploads.length > 0}
-                          >
-                            <Camera size={20} strokeWidth={2} aria-hidden="true" />
-                          </button>
-                        </>
+                          {groupComposerMenu === 'tools' && (
+                            <div
+                              className="composer-context"
+                              style={{
+                                position: 'absolute',
+                                bottom: '110%',
+                                left: 0,
+                                zIndex: 20,
+                                minWidth: 160,
+                                flexDirection: 'column',
+                                alignItems: 'stretch',
+                                gap: 4,
+                                padding: 8,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  background: 'transparent',
+                                  border: 0,
+                                  color: 'inherit',
+                                  padding: '6px 8px',
+                                  cursor: 'pointer',
+                                  borderRadius: 6,
+                                  fontSize: 13,
+                                }}
+                                onClick={() => {
+                                  setGroupComposerMenu(null);
+                                  setPollDraft({ question: '', options: ['', ''] });
+                                }}
+                              >
+                                <BarChart2 size={14} /> Poll
+                              </button>
+                              <button
+                                type="button"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  background: 'transparent',
+                                  border: 0,
+                                  color: 'inherit',
+                                  padding: '6px 8px',
+                                  cursor: 'pointer',
+                                  borderRadius: 6,
+                                  fontSize: 13,
+                                }}
+                                onClick={() => {
+                                  setGroupComposerMenu(null);
+                                  setEventDraft({ title: '', when: '', where: '', notes: '' });
+                                }}
+                              >
+                                <Calendar size={14} /> Event
+                              </button>
+                              {isGroupAdmin(activeGroup, user.id) && (
+                                <button
+                                  type="button"
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    background: 'transparent',
+                                    border: 0,
+                                    color: 'inherit',
+                                    padding: '6px 8px',
+                                    cursor: 'pointer',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                  }}
+                                  onClick={() => {
+                                    setGroupComposerMenu(null);
+                                    setPendingAnnouncement(true);
+                                    textareaRef.current?.focus();
+                                  }}
+                                >
+                                  <Megaphone size={14} /> Announcement
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                       <button
                         type="button"
@@ -1893,9 +2365,11 @@ export default function Chat() {
                             ? 'Sending voice note…'
                             : uploads.length
                               ? 'Uploading encrypted file…'
-                              : isGroupChat
-                                ? 'Type an encrypted group message…'
-                                : 'Type an encrypted message…'
+                              : pendingAnnouncement
+                                ? 'Write an announcement…'
+                                : isGroupChat
+                                  ? 'Type an encrypted group message… @mention'
+                                  : 'Type an encrypted message…'
                         }
                         value={draft}
                         onChange={handleDraftChange}
@@ -1908,10 +2382,6 @@ export default function Chat() {
                       />
                       {draft.trim() ? (
                         <button type="submit" className="send-button" aria-label="Send encrypted message" disabled={sendingVoice}>
-                          <Send size={18} strokeWidth={2} aria-hidden="true" />
-                        </button>
-                      ) : isGroupChat ? (
-                        <button type="submit" className="send-button" aria-label="Send encrypted message" disabled>
                           <Send size={18} strokeWidth={2} aria-hidden="true" />
                         </button>
                       ) : (
@@ -1951,6 +2421,140 @@ export default function Chat() {
           onClose={() => setShowCreateGroup(false)}
           onCreate={handleCreateGroup}
         />
+      )}
+
+      {showGroupSettings && activeGroup && (
+        <GroupSettingsModal
+          group={activeGroup}
+          currentUserId={user.id}
+          users={users}
+          onClose={() => setShowGroupSettings(false)}
+          onUpdated={mergeUpdatedGroup}
+          onLeftOrDeleted={handleLeftOrDeletedGroup}
+        />
+      )}
+
+      {pollDraft && (
+        <div className="create-group-overlay" onClick={() => setPollDraft(null)}>
+          <form
+            className="create-group-modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitPollDraft}
+          >
+            <div className="create-group-modal-header">
+              <div className="create-group-modal-heading">
+                <h2>Create poll</h2>
+                <p>Question and options are encrypted end-to-end</p>
+              </div>
+              <button type="button" className="create-group-close" onClick={() => setPollDraft(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="create-group-field">
+              <span className="create-group-label">Question</span>
+              <input
+                className="create-group-input"
+                value={pollDraft.question}
+                onChange={(e) => setPollDraft((d) => ({ ...d, question: e.target.value }))}
+                placeholder="Ask something…"
+                autoFocus
+              />
+            </label>
+            {(pollDraft.options || []).map((opt, idx) => (
+              <label key={idx} className="create-group-field">
+                <span className="create-group-label">Option {idx + 1}</span>
+                <input
+                  className="create-group-input"
+                  value={opt}
+                  onChange={(e) =>
+                    setPollDraft((d) => {
+                      const options = [...d.options];
+                      options[idx] = e.target.value;
+                      return { ...d, options };
+                    })
+                  }
+                  placeholder={`Choice ${idx + 1}`}
+                />
+              </label>
+            ))}
+            <div className="create-group-actions">
+              {(pollDraft.options || []).length < 4 && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setPollDraft((d) => ({ ...d, options: [...d.options, ''] }))}
+                >
+                  Add option
+                </button>
+              )}
+              <button type="submit" className="confirm-btn">
+                Send poll
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {eventDraft && (
+        <div className="create-group-overlay" onClick={() => setEventDraft(null)}>
+          <form
+            className="create-group-modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitEventDraft}
+          >
+            <div className="create-group-modal-header">
+              <div className="create-group-modal-heading">
+                <h2>Create event</h2>
+                <p>Details are sealed for group members only</p>
+              </div>
+              <button type="button" className="create-group-close" onClick={() => setEventDraft(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <label className="create-group-field">
+              <span className="create-group-label">Title</span>
+              <input
+                className="create-group-input"
+                value={eventDraft.title}
+                onChange={(e) => setEventDraft((d) => ({ ...d, title: e.target.value }))}
+                placeholder="Event name"
+                autoFocus
+              />
+            </label>
+            <label className="create-group-field">
+              <span className="create-group-label">When</span>
+              <input
+                className="create-group-input"
+                type="datetime-local"
+                value={eventDraft.when}
+                onChange={(e) => setEventDraft((d) => ({ ...d, when: e.target.value }))}
+              />
+            </label>
+            <label className="create-group-field">
+              <span className="create-group-label">Where</span>
+              <input
+                className="create-group-input"
+                value={eventDraft.where}
+                onChange={(e) => setEventDraft((d) => ({ ...d, where: e.target.value }))}
+                placeholder="Location (optional)"
+              />
+            </label>
+            <label className="create-group-field">
+              <span className="create-group-label">Notes</span>
+              <input
+                className="create-group-input"
+                value={eventDraft.notes}
+                onChange={(e) => setEventDraft((d) => ({ ...d, notes: e.target.value }))}
+                placeholder="Extra details (optional)"
+              />
+            </label>
+            <div className="create-group-actions">
+              <button type="submit" className="confirm-btn">
+                Send event
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {showSettings && (
