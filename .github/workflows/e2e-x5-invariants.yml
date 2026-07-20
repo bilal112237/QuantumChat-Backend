@@ -1,0 +1,35 @@
+name: E2E X5 Invariants
+
+# Hard gate: sealed calls, stories, push blindness, and X5 envelope rules.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-x5:
+    name: E2E X5 Invariants
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache MongoDB test binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-7.0.24-${{ runner.os }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E X5 invariant suite
+        run: npm run test:security:x5

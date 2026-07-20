@@ -85,11 +85,15 @@ export async function notifyUser(userId, payload) {
   const subs = await PushSubscription.find({ user: uid });
   if (!subs.length) return;
 
-  const body = JSON.stringify({
-    title: payload?.title || 'QuantumChat',
-    body: payload?.body || 'New notification',
-    ...payload,
-  });
+  // E2E X5: never put message plaintext or ciphertext into push payloads.
+  const title = String(payload?.title || 'QuantumChat').slice(0, 64);
+  const bodyText = String(payload?.body || 'New notification').slice(0, 120);
+  if (/SECRET_E2E_|ciphertext|forRecipient|v=0/i.test(`${title}\n${bodyText}`)) {
+    console.warn('[push] blocked unsafe notification payload');
+    return;
+  }
+
+  const body = JSON.stringify({ title, body: bodyText });
 
   await Promise.all(
     subs.map(async (sub) => {

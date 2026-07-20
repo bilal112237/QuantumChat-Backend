@@ -11,6 +11,13 @@ Configure repository branch protection to require:
 - Transport Hardening
 - Security Canary (must fail)
 - E2E Ciphertext Confidentiality (must not decode)
+- E2E X5 Invariants
+- Socket Auth Security
+
+## Supply chain (required)
+
+- Dependency Review *(pull requests only)*
+- Gitleaks
 
 ## Legacy / umbrella (recommended)
 
@@ -20,4 +27,8 @@ Configure repository branch protection to require:
 
 Require the branch to be up to date and disable administrator bypass.
 
-Nightly (not required for merge): **Deep Fuzz and Stress** (`security-nightly.yml`).
+## Not required for merge (scheduled / informational)
+
+- Deep Fuzz and Stress (`security-nightly.yml`)
+- OpenSSF Scorecard (`ossf-scorecard.yml`)
+- SBOM (`sbom.yml`)

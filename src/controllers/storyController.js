@@ -4,6 +4,8 @@ import Story from '../models/Story.js';
 import { resolveUploadPath } from '../middleware/upload.js';
 import { areUsersBlocked } from './userController.js';
 
+const HEX_64 = /^[0-9a-f]{64}$/i;
+
 function mediaTypeFromMime(mimetype = '') {
   if (mimetype.startsWith('image/')) return 'image';
   if (mimetype.startsWith('video/')) return 'video';
@@ -15,6 +17,38 @@ function parseSealedFlag(value) {
   if (value === true || value === 1) return true;
   const s = String(value || '').toLowerCase();
   return s === 'true' || s === '1' || s === 'yes';
+}
+
+function parseEnvelopes(raw) {
+  let list = raw;
+  if (typeof raw === 'string') {
+    try {
+      list = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(list) || list.length < 1) return null;
+  const envelopes = [];
+  for (const item of list) {
+    if (!item || !mongoose.isValidObjectId(item.user)) return null;
+    if (
+      typeof item.ciphertext !== 'string' ||
+      typeof item.nonce !== 'string' ||
+      !HEX_64.test(item.ephemeralPublicKey || '') ||
+      !HEX_64.test(item.targetPublicKey || '')
+    ) {
+      return null;
+    }
+    envelopes.push({
+      user: item.user,
+      ciphertext: item.ciphertext,
+      nonce: item.nonce,
+      ephemeralPublicKey: String(item.ephemeralPublicKey).toLowerCase(),
+      targetPublicKey: String(item.targetPublicKey).toLowerCase(),
+    });
+  }
+  return envelopes;
 }
 
 export async function createStory(req, res) {
@@ -48,13 +82,39 @@ export async function createStory(req, res) {
     }
     if (mediaType === 'image') durationMs = 0;
 
-    // Caption may remain empty when sealed (client may omit plaintext caption).
     const caption =
       sealed
         ? ''
         : typeof req.body.caption === 'string'
           ? req.body.caption.trim().slice(0, 200)
           : '';
+
+    let envelopes;
+    let contentIv;
+    if (sealed) {
+      envelopes = parseEnvelopes(req.body.envelopes);
+      if (!envelopes) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(400).json({
+          success: false,
+          error: 'Sealed stories require per-viewer X5 envelopes',
+        });
+      }
+      const selfIncluded = envelopes.some((e) => String(e.user) === String(req.user._id));
+      if (!selfIncluded) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(400).json({
+          success: false,
+          error: 'Sealed stories must include an envelope for the author',
+        });
+      }
+      contentIv = typeof req.body.contentIv === 'string' ? req.body.contentIv.slice(0, 128) : '';
+      if (!contentIv) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(400).json({ success: false, error: 'contentIv is required for sealed stories' });
+      }
+    }
+
     const relativePath = `stories/${req.file.filename}`;
     const story = await Story.create({
       user: req.user._id,
@@ -67,16 +127,8 @@ export async function createStory(req, res) {
       caption,
       expiresAt: new Date(Date.now() + Story.ttlMs),
       sealed,
-      envelopeNonce:
-        typeof req.body.envelopeNonce === 'string' ? req.body.envelopeNonce.slice(0, 128) : undefined,
-      envelopeEphemeralPublicKey:
-        typeof req.body.envelopeEphemeralPublicKey === 'string'
-          ? req.body.envelopeEphemeralPublicKey.slice(0, 128)
-          : undefined,
-      envelopeTargetHint:
-        typeof req.body.envelopeTargetHint === 'string'
-          ? req.body.envelopeTargetHint.slice(0, 128)
-          : undefined,
+      contentIv: sealed ? contentIv : undefined,
+      envelopes: sealed ? envelopes : undefined,
     });
 
     const payload = {
@@ -141,13 +193,16 @@ export async function getStoryMedia(req, res) {
       return res.status(403).json({ success: false, error: 'Not allowed' });
     }
 
-    // Sealed stories: only the author can download ciphertext (device-local key decrypt).
-    if (story.sealed && String(story.user) !== String(req.user._id)) {
-      return res.status(403).json({
-        success: false,
-        error: 'Sealed story — unavailable on this build',
-        sealed: true,
-      });
+    if (story.sealed) {
+      const envelopes = story.envelopes || [];
+      const allowed = envelopes.some((e) => String(e.user) === String(req.user._id));
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not in sealed story audience',
+          sealed: true,
+        });
+      }
     }
 
     const filePath = resolveUploadPath(story.storagePath);

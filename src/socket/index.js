@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { isSealedEnvelope } from '../utils/callEnvelope.js';
 
 const onlineUsers = new Map(); // userId -> Set(socketId)
 
@@ -101,49 +102,26 @@ export function attachSocket(io) {
       socket.leave(`group:${String(groupId)}`);
     });
 
-    // WebRTC signaling — media never touches the server
-    socket.on('call:invite', ({ to, callId, video = false } = {}) => {
+    // WebRTC signaling — media is P2P; SDP/ICE must be X5 sealed envelopes only
+    function relaySealedCall(eventName, payload = {}) {
+      const { to, callId, envelope } = payload;
       if (!to || !callId) return;
-      io.to(String(to)).emit('call:invite', {
+      if (payload.sdp != null || payload.candidate != null) return;
+      if (!isSealedEnvelope(envelope)) return;
+      io.to(String(to)).emit(eventName, {
         from: userId,
         callId: String(callId),
-        video: Boolean(video),
+        envelope,
       });
-    });
+    }
 
-    socket.on('call:accept', ({ to, callId } = {}) => {
-      if (!to || !callId) return;
-      io.to(String(to)).emit('call:accept', { from: userId, callId: String(callId) });
-    });
-
-    socket.on('call:reject', ({ to, callId, reason } = {}) => {
-      if (!to || !callId) return;
-      io.to(String(to)).emit('call:reject', {
-        from: userId,
-        callId: String(callId),
-        reason: reason || 'rejected',
-      });
-    });
-
-    socket.on('call:hangup', ({ to, callId } = {}) => {
-      if (!to || !callId) return;
-      io.to(String(to)).emit('call:hangup', { from: userId, callId: String(callId) });
-    });
-
-    socket.on('call:offer', ({ to, callId, sdp } = {}) => {
-      if (!to || !callId || !sdp) return;
-      io.to(String(to)).emit('call:offer', { from: userId, callId: String(callId), sdp });
-    });
-
-    socket.on('call:answer', ({ to, callId, sdp } = {}) => {
-      if (!to || !callId || !sdp) return;
-      io.to(String(to)).emit('call:answer', { from: userId, callId: String(callId), sdp });
-    });
-
-    socket.on('call:ice', ({ to, callId, candidate } = {}) => {
-      if (!to || !callId || !candidate) return;
-      io.to(String(to)).emit('call:ice', { from: userId, callId: String(callId), candidate });
-    });
+    socket.on('call:invite', (payload = {}) => relaySealedCall('call:invite', payload));
+    socket.on('call:accept', (payload = {}) => relaySealedCall('call:accept', payload));
+    socket.on('call:reject', (payload = {}) => relaySealedCall('call:reject', payload));
+    socket.on('call:hangup', (payload = {}) => relaySealedCall('call:hangup', payload));
+    socket.on('call:offer', (payload = {}) => relaySealedCall('call:offer', payload));
+    socket.on('call:answer', (payload = {}) => relaySealedCall('call:answer', payload));
+    socket.on('call:ice', (payload = {}) => relaySealedCall('call:ice', payload));
 
     socket.on('message:delivered', async ({ messageId } = {}) => {
       try {

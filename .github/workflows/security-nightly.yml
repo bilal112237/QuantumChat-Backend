@@ -33,6 +33,10 @@ jobs:
         env:
           SECURITY_FUZZ_KEYS: '1000'
 
+      - name: Run E2E X5 invariants (nightly)
+        run: npm run test:security:x5
+
+
       - name: Upload TAP log
         if: always()
         uses: actions/upload-artifact@v4
