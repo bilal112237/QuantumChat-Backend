@@ -32,8 +32,9 @@ test('[HEADERS] disallowed CORS Origin is rejected', async () => {
   const res = await fetch(`${ctx.base}/health`, {
     headers: { Origin: 'https://evil.example' },
   });
-  // cors package invokes error callback → Express error handler (403 or 500)
-  assert.ok([403, 500].includes(res.status), `expected CORS reject, got ${res.status}`);
+  // Request may still succeed, but must not reflect the evil Origin.
+  assert.equal(res.status, 200);
+  assert.notEqual(res.headers.get('access-control-allow-origin'), 'https://evil.example');
 });
 
 test('[HEADERS] allowed Origin receives Access-Control-Allow-Origin', async () => {

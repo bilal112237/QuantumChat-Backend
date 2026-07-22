@@ -40,15 +40,31 @@ export function createApp() {
     })
   );
 
-  const allowedOrigins = String(process.env.CLIENT_URL || 'http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  // Always allow known Quantum product frontends, then merge CLIENT_URL.
+  // Passing an Error into the cors callback used to become a 500 because the
+  // Express error handler ignored err.status — browsers on ai.* saw login 500s.
+  const allowedOrigins = [
+    ...new Set(
+      [
+        'http://localhost:5173',
+        'http://localhost:5175',
+        'https://chat.quantumlogicslimited.com',
+        'https://ai.quantumlogicslimited.com',
+        'https://quantum-chat.vercel.app',
+        'https://quantum-ai-frontend.vercel.app',
+        ...String(process.env.CLIENT_URL || '')
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean),
+      ]
+    ),
+  ];
   app.use(
     cors({
       origin(origin, callback) {
         if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-        return callback(Object.assign(new Error('Origin not allowed by CORS'), { status: 403 }));
+        // Deny without throwing — avoids turning CORS misses into HTTP 500.
+        return callback(null, false);
       },
     })
   );
@@ -82,6 +98,13 @@ export function createApp() {
     }
     if (err?.name === 'MulterError') {
       return res.status(400).json({ success: false, error: err.message || 'Upload failed' });
+    }
+    const status = Number(err?.status || err?.statusCode) || 500;
+    if (status >= 400 && status < 600 && status !== 500) {
+      return res.status(status).json({
+        success: false,
+        error: err.message || 'Request failed',
+      });
     }
     res.status(500).json({ success: false, error: 'Internal server error' });
   });

@@ -372,10 +372,14 @@ input:focus-visible,
 
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top, 0px))
+    max(24px, env(safe-area-inset-right, 0px))
+    max(24px, env(safe-area-inset-bottom, 0px))
+    max(24px, env(safe-area-inset-left, 0px));
   position: relative;
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, var(--bg-auth-glow), transparent 55%),
@@ -385,8 +389,8 @@ input:focus-visible,
 
 .auth-page-topbar {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: max(20px, env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
 }
 
 .auth-card {
@@ -548,7 +552,7 @@ input:focus-visible,
 }
 
 .auth-field:has(.auth-password-toggle) input {
-  padding-right: 44px;
+  padding-right: 52px;
 }
 
 .auth-password-toggle {
@@ -559,8 +563,8 @@ input:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: none;
   border-radius: var(--radius-sm, 8px);
@@ -837,7 +841,7 @@ input:focus-visible,
 
 .settings-modal {
   width: min(420px, 100%);
-  max-height: min(84vh, 640px);
+  max-height: min(84dvh, 640px);
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -957,7 +961,10 @@ input:focus-visible,
 .chat-page {
   display: flex;
   gap: 12px;
-  padding: 12px;
+  padding: max(12px, env(safe-area-inset-top, 0px))
+    max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
@@ -1190,14 +1197,17 @@ input:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
   background: var(--overlay);
   animation: confirmFadeIn 160ms ease;
 }
 
 .create-group-modal {
   width: min(440px, 100%);
-  max-height: min(84vh, 680px);
+  max-height: min(84dvh, 680px);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1539,8 +1549,8 @@ input:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   background: transparent;
@@ -1563,7 +1573,7 @@ input:focus-visible,
   color: var(--danger);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .user-list-actions {
     opacity: 1;
   }
@@ -1658,6 +1668,38 @@ input:focus-visible,
   gap: 12px;
   min-width: 0;
   flex: 1;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chat-header-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.chat-header-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-header-btn:hover {
+  background: var(--accent-muted);
+  color: var(--accent);
+  transform: scale(1.03);
 }
 
 .chat-header-peer {
@@ -1831,8 +1873,8 @@ input:focus-visible,
 .message-more-btn {
   opacity: 0;
   align-self: center;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
@@ -2205,7 +2247,8 @@ input:focus-visible,
 }
 
 .attachment-preview {
-  max-width: 240px;
+  max-width: min(240px, 100%);
+  width: 100%;
   border-radius: var(--radius-md);
   display: block;
   margin-bottom: 4px;
@@ -2215,11 +2258,13 @@ input:focus-visible,
 .attachment-media {
   position: relative;
   display: inline-block;
-  max-width: 280px;
+  max-width: min(280px, 100%);
+  min-width: 0;
 }
 
 .attachment-video {
-  max-width: 280px;
+  max-width: min(280px, 100%);
+  width: 100%;
   max-height: 240px;
   border-radius: var(--radius-md);
   background: #000;
@@ -2230,8 +2275,8 @@ input:focus-visible,
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -2257,8 +2302,9 @@ input:focus-visible,
 }
 
 .attachment-doc {
-  min-width: 200px;
-  max-width: 280px;
+  min-width: 0;
+  width: 100%;
+  max-width: min(280px, 100%);
   padding: 10px 12px;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
@@ -2357,7 +2403,8 @@ input:focus-visible,
 
 /* Skeleton preview style to prevent Layout Shifts */
 .attachment-preview-placeholder {
-  width: 240px;
+  width: min(240px, 100%);
+  max-width: 100%;
   height: 160px;
   border-radius: var(--radius-md);
   margin-bottom: 4px;
@@ -2446,7 +2493,10 @@ input:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
 }
 
 .camera-panel {
@@ -2565,7 +2615,7 @@ input:focus-visible,
 
 .composer-shell {
   position: relative;
-  padding: 12px 16px 18px;
+  padding: 12px 16px max(18px, env(safe-area-inset-bottom, 0px));
   background: transparent;
   z-index: 10;
 }
@@ -2670,8 +2720,9 @@ input:focus-visible,
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 180px;
-  max-width: 260px;
+  min-width: 0;
+  width: 100%;
+  max-width: min(260px, 100%);
   padding: 6px 4px 8px;
 }
 
@@ -2951,7 +3002,10 @@ input:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top, 0px))
+    max(24px, env(safe-area-inset-right, 0px))
+    max(24px, env(safe-area-inset-bottom, 0px))
+    max(24px, env(safe-area-inset-left, 0px));
   background: var(--overlay);
   animation: confirmFadeIn 160ms ease;
 }
@@ -3089,7 +3143,7 @@ input:focus-visible,
    Responsive
    ---------------------------------------------------------------- */
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .chat-page {
     gap: 0;
     padding: 0;
@@ -3105,6 +3159,7 @@ input:focus-visible,
     border-radius: 0;
     border: none;
     border-right: 1px solid var(--border-subtle);
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   .sidebar.open {
@@ -3119,22 +3174,47 @@ input:focus-visible,
   .chat-main {
     border-radius: 0;
     border: none;
+    min-width: 0;
   }
 
   .mobile-menu-btn {
     display: flex;
   }
 
+  .composer-hint {
+    display: none;
+  }
+
+  .user-list-actions {
+    opacity: 1;
+  }
+
+  .message-bubble-wrap:hover .message-more-btn,
+  .message-bubble-wrap:focus-within .message-more-btn,
+  .message-more-btn,
+  .message-bubble-wrap:hover .message-react-btn,
+  .message-bubble-wrap:focus-within .message-react-btn,
+  .message-react-btn,
+  .attachment-download-fab {
+    opacity: 1;
+  }
+
+  .emoji-picker-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+
   .message-bubble {
     max-width: 82%;
+    min-width: 0;
   }
 
   .chat-header {
     padding: 14px 16px;
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
   }
 
   .composer-shell {
-    padding: 10px 12px 14px;
+    padding: 10px 12px max(14px, env(safe-area-inset-bottom, 0px));
   }
 
   .composer {
@@ -3144,21 +3224,52 @@ input:focus-visible,
 
   .message-list {
     padding: 16px;
+    min-width: 0;
   }
 
   .scroll-bottom-pill {
     bottom: 90px;
     right: 16px;
   }
+
+  .attachment-preview,
+  .attachment-media,
+  .attachment-video {
+    max-width: 100%;
+  }
+
+  .attachment-doc,
+  .voice-player {
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
   .auth-card {
-    padding: 32px 24px 24px;
+    padding: 28px 20px 22px;
   }
 
   .message-bubble {
     max-width: 90%;
+  }
+
+  .emoji-picker-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .emoji-picker-grid button {
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .composer {
+    gap: 4px;
+  }
+
+  .attach-button,
+  .send-button {
+    width: 38px;
+    height: 38px;
   }
 }
 
@@ -3419,8 +3530,8 @@ input:focus-visible,
 
 .message-react-btn {
   opacity: 0;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
@@ -3789,13 +3900,15 @@ body.theme-light .theme-switcher-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   animation: lightboxFadeIn 250ms ease both;
   cursor: zoom-out;
 }
 
 .lightbox-image {
   max-width: 90vw;
-  max-height: 88vh;
+  max-height: 88dvh;
   border-radius: var(--radius-lg);
   object-fit: contain;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
@@ -3805,8 +3918,8 @@ body.theme-light .theme-switcher-btn:hover {
 
 .lightbox-close {
   position: absolute;
-  top: 20px;
-  right: 24px;
+  top: max(20px, env(safe-area-inset-top, 0px));
+  right: max(24px, env(safe-area-inset-right, 0px));
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
@@ -4200,12 +4313,12 @@ body.theme-eyecare .drag-drop-overlay,
   left: 0;
   right: 0;
   z-index: 50;
-  padding: 18px 0;
+  padding: max(18px, env(safe-area-inset-top, 0px)) 0 18px;
   transition: background var(--transition-normal), border-color var(--transition-normal), padding var(--transition-normal), backdrop-filter var(--transition-normal);
 }
 
 .landing-nav.scrolled {
-  padding: 12px 0;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 0 12px;
   background: var(--bg-glass);
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
@@ -4974,7 +5087,7 @@ button.message-reply-preview:hover {
 
 .forward-modal {
   width: min(420px, 100%);
-  max-height: min(72vh, 560px);
+  max-height: min(72dvh, 560px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -5065,7 +5178,7 @@ button.message-reply-preview:hover {
    ================================================================ */
 .group-settings-modal {
   width: min(520px, 94vw);
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow: auto;
 }
 
@@ -5400,10 +5513,14 @@ button.message-reply-preview:hover {
 
 .join-invite-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top, 0px))
+    max(24px, env(safe-area-inset-right, 0px))
+    max(24px, env(safe-area-inset-bottom, 0px))
+    max(24px, env(safe-area-inset-left, 0px));
   background: var(--bg-app);
 }
 
