@@ -41,6 +41,12 @@ Include:
 - Pure DoS without a practical, actionable exploit
 - Issues solely in Frontend or QuantumAI (report to those repos)
 
+## XSS controls
+
+- Helmet CSP for API responses (`default-src 'none'`), `nosniff`, `frameguard: deny`
+- Avatar / group photo / story image uploads allowlist JPEG, PNG, WebP, GIF only (no SVG)
+- Served media uses allowlisted `Content-Type` (does not trust client MIME for raster images)
+
 ## Safe harbor
 
 Good-faith research that follows this policy and avoids privacy abuse or destructive

@@ -17,7 +17,7 @@ What does this PR change and why?
 
 ## Checklist
 
-- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [ ] I read [CONTRIBUTING.md](../docs/CONTRIBUTING.md)
 - [ ] `npm run test:security` (or the relevant lane) passes locally
 - [ ] No secrets, private keys, or plaintext chat content in the diff
 - [ ] Branch protection required checks are expected to pass

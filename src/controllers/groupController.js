@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import Group from '../models/Group.js';
 import User from '../models/User.js';
 import Message from '../models/Message.js';
-import { resolveUploadPath } from '../middleware/upload.js';
+import { resolveUploadPath, safeImageContentType } from '../middleware/upload.js';
 import { sealForPublicKey } from '../utils/sealedBox.js';
 import { isUserOnline } from '../socket/index.js';
 import { notifyUser } from '../services/pushService.js';
@@ -292,7 +292,7 @@ export async function uploadGroupPhoto(req, res) {
       }
     }
     group.photoPath = `groups/${req.file.filename}`;
-    group.photoMimeType = req.file.mimetype;
+    group.photoMimeType = safeImageContentType(req.file.mimetype);
     await group.save();
     const populated = await loadGroup(group._id);
     const payload = populated.toPublicJSON();
@@ -314,7 +314,9 @@ export async function getGroupPhoto(req, res) {
     if (!group.isMember(req.user._id)) {
       return res.status(403).json({ success: false, error: 'Not a group member' });
     }
-    res.setHeader('Content-Type', group.photoMimeType || 'image/jpeg');
+    res.setHeader('Content-Type', safeImageContentType(group.photoMimeType));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
     res.sendFile(resolveUploadPath(group.photoPath), (err) => {
       if (err && !res.headersSent) res.status(404).json({ success: false, error: 'Photo not found' });
     });

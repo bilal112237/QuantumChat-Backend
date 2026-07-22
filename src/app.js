@@ -22,7 +22,23 @@ export function createApp() {
   // The API is deliberately consumed cross-origin (frontend dev server runs
   // on a different port), so the default same-origin resource policy would
   // block the browser from reading any response, including plain JSON.
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'none'"],
+          formAction: ["'none'"],
+        },
+      },
+      referrerPolicy: { policy: 'no-referrer' },
+      frameguard: { action: 'deny' },
+      xContentTypeOptions: true,
+    })
+  );
 
   const allowedOrigins = String(process.env.CLIENT_URL || 'http://localhost:5173')
     .split(',')

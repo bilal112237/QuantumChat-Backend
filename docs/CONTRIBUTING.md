@@ -32,7 +32,7 @@ Useful lanes:
 - `npm run test:security:api`
 - `npm run test:security:socket`
 
-See [README.md](README.md) and [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md).
+See [README.md](../README.md) and [`.github/BRANCH_PROTECTION.md`](../.github/BRANCH_PROTECTION.md).
 
 ## Pull requests
 
@@ -45,4 +45,4 @@ See [README.md](README.md) and [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_P
 ## License
 
 By contributing, you agree that your contributions are licensed under the
-[MIT License](LICENSE).
+[MIT License](../LICENSE).

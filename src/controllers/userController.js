@@ -4,7 +4,7 @@ import Message from '../models/Message.js';
 import Attachment from '../models/Attachment.js';
 import mongoose from 'mongoose';
 import fs from 'fs';
-import { resolveUploadPath } from '../middleware/upload.js';
+import { resolveUploadPath, safeImageContentType } from '../middleware/upload.js';
 import { toObjectId } from '../utils/toObjectId.js';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
@@ -174,7 +174,7 @@ export async function uploadAvatar(req, res) {
     }
 
     req.user.avatarPath = relativePath;
-    req.user.avatarMimeType = req.file.mimetype;
+    req.user.avatarMimeType = safeImageContentType(req.file.mimetype);
     await req.user.save();
     res.json({ success: true, data: req.user.toSelfJSON() });
   } catch (err) {
@@ -215,7 +215,9 @@ export async function getAvatar(req, res) {
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, error: 'Avatar file missing' });
     }
-    res.setHeader('Content-Type', user.avatarMimeType || 'image/jpeg');
+    res.setHeader('Content-Type', safeImageContentType(user.avatarMimeType));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
     res.setHeader('Cache-Control', 'private, max-age=3600');
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {

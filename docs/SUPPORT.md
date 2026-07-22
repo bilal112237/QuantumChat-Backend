@@ -17,6 +17,6 @@ npm run test:security
 npm run test:security:x5
 ```
 
-See [README.md](README.md) for environment variables and CI lanes.
+See [README.md](../README.md) for environment variables and CI lanes.
 
 Maintainers respond as capacity allows; security reports are prioritized.

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import mongoose from 'mongoose';
 import Story from '../models/Story.js';
-import { resolveUploadPath } from '../middleware/upload.js';
+import { resolveUploadPath, isSafeImageMime, safeImageContentType } from '../middleware/upload.js';
 import { areUsersBlocked } from './userController.js';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
@@ -209,9 +209,25 @@ export async function getStoryMedia(req, res) {
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, error: 'Media missing' });
     }
-    res.setHeader('Content-Type', story.sealed ? 'application/octet-stream' : story.mimetype);
+    if (story.sealed) {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('X-QuantumChat-Sealed', '1');
+    } else if (isSafeImageMime(story.mimetype)) {
+      res.setHeader('Content-Type', safeImageContentType(story.mimetype));
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (
+      String(story.mimetype || '').startsWith('video/') ||
+      String(story.mimetype || '').startsWith('audio/')
+    ) {
+      res.setHeader('Content-Type', story.mimetype);
+      res.setHeader('Content-Disposition', 'inline');
+    } else {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, max-age=300');
-    if (story.sealed) res.setHeader('X-QuantumChat-Sealed', '1');
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
