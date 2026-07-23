@@ -22,6 +22,7 @@ function validateEnvelope(envelope) {
   return (
     envelope &&
     typeof envelope.ciphertext === 'string' &&
+    envelope.ciphertext.length > 0 &&
     typeof envelope.nonce === 'string' &&
     HEX_64.test(envelope.ephemeralPublicKey || '') &&
     HEX_64.test(envelope.targetPublicKey || '')
